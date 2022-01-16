@@ -1,0 +1,122 @@
+---
+title: My first about post about... making my first post!
+date: 2021-12-14
+meta:
+  title: My First Post
+  description: Some quick notes about adding syntax highlighting
+---
+
+## {attributes.title}
+
+{attributes.date.toDateString()}
+
+### First of all how did I get this page to render?
+
+Remix has [built-in support for MDX](https://remix.run/docs/en/v1/guides/mdx), it automatically will treat each `.mdx` file witin `/routes` like a route module. Just like regular components.
+Basically that means an MDX file is automatically a page! There's really not much work to do.
+
+### Syntax Highlighting
+
+The only thing I really needed to setup was some syntax highlighting, e.g. you should notice the following code block should already be pre-styled with my currently selected theme:
+
+```js
+function helloWorld() {
+  return 'hello!';
+}
+```
+
+To achieve this first of all I had to update the base `remix.config.js` to now have the `mdx` property.
+
+```js
+module.exports = {
+  // ... existing config here
+  mdx: async (filename) => {
+    const [rehypeHighlight] = await Promise.all([
+      import('rehype-highlight').then((mod) => mod.default),
+    ]);
+    return {
+      rehypePlugins: [rehypeHighlight],
+    };
+  },
+};
+```
+
+Notice that we are using `rehype-highlight` as a plugin which ultimately will use `highlight.js` behind the scenes to transform our html.
+
+There are actually other ways to do this, for example you could also use a remark plugin instead or a plugin which uses PrismJS.
+Honestly this MDX ecosystem is still very new to me so I'm not quite sure yet what's the best approach. Will look into that more later!
+
+The `rehype-highlight` plugin was the example used in the docs so I just ran with it.
+
+Anyways, once you have that config change I then started configuring my blog routing.
+
+### Let's take a moment to talk about the routing
+
+As an example I currently (at the time of writing) have the following files:
+
+```
+app/routes/blog.tsx --> The layout "parent"
+app/routes/blog/index.tsx --> The "index route" for /blog
+app/routes/blog/first-post.mdx --> The post you're reading!
+```
+
+The distinction between `blog.tsx` and `blog/index.tsx` here was initially very confusing to me.
+However it started to make a little bit more sense when I remeber how the same sort of ideas work with React Route 6.
+
+For example in React Router that routing might look like this:
+
+```jsx
+<Routes>
+  <Route path="/" element={<App />}>
+    <Route index element={<Home />} />
+    <Route path="blog" element={<Blog />}>
+      <Route path="first-post" element={<FirstPost />} />
+      <Route index element={<BlogIndex />} />
+    </Route>
+  </Route>
+</Routes>
+```
+
+In the above example the element `<Blog />` basically houses the common layout/logic for all of the children below it. It specifically needs to render an `<Outlet />` to define where the nested routes will render.
+That's basically the same exact idea here in Remix, except that structure is being defined using the file system. Once I wrapped my head around that it made a litte bit more sense.
+
+### Now back to syntax highlighting...
+
+Now that we have that structure in place, the only thing left to do is setup up our `highlight.js` CSS file to specifically load in _only_ for our blog routing. This is because we likely won't need those styles anywhere else but in the blog posts.
+
+In addition to that Remix seems to optimize what CSS is sent _per page_. Meaning to enable our syntax highlighting we'd have to include the styles in each page. That seems overkill, so instead we're going to load it inside our `blog.tsx` (which again remember wraps the underlying nested children) so that we only define it once across all blog posts.
+
+```ts
+import styles from 'highlight.js/styles/github-dark-dimmed.css'; // change this to your desired theme
+import type { LinksFunction, LoaderFunction } from 'remix';
+import { MetaFunction, Outlet } from "remix";
+
+export const links: LinksFunction = () => {
+  return [
+    {
+      rel: 'stylesheet',
+      href: styles,
+    },
+  ];
+}
+
+export default function Blog() {
+  return (
+    <Outlet />
+  );
+}
+
+```
+
+Now if you're able to see all of the above code blocks with proper highlighting then I must've done it right!
+
+## Where to go from here
+
+- In general the site's stlyes and look/feel is still pretty plain. I'll need to improve that to something... reasonable.
+    - Looking to add tailwind since I've been wanting to learn that anyways
+- A challenge to figure out: how to display nested attributes from the parent `blog.tsx`? For example what if I wanted to determine the title or date of a specific blog post so that I can render it consistently across all posts?
+    - Actually I noticed Kent C. Dodd's blog doesn't utilize Remix's built-in MDX route modules. I have a feeling it's because of maybe one of these concerns
+- I need to improve the [base blog page](/blog) to dynamically determine the full list of blog posts
+    - I'll probably need to read from the file system then utilize frontmatter to determine titles, dates, etc.
+
+Anyways that's it for now!
